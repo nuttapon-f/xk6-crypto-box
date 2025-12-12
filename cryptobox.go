@@ -1,8 +1,16 @@
 package cryptobox
 
 import (
+	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/asn1"
 	"encoding/base64"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"math/big"
 
 	"golang.org/x/crypto/nacl/box"
 )
@@ -92,4 +100,28 @@ func (n *CryptoBox) DecryptNext(cipherB64, clientPrivB64, serverPubB64, nonceB64
 	}
 
 	return string(decrypted), nil
+}
+
+func (n *CryptoBox) EcdsaSign(message, privateKey string) (string, error) {
+
+	privateKeyBytes := []byte(privateKey)
+
+	privBlock, _ := pem.Decode(privateKeyBytes)
+	if privBlock == nil {
+		return "", errors.New("❌ Failed to decode PEM block for private key")
+	}
+
+	privKey, err := x509.ParseECPrivateKey(privBlock.Bytes)
+	if err != nil {
+		return "", errors.New("❌ Failed to parse EC private key: " + err.Error())
+	}
+
+	hash := sha256.Sum256([]byte(message))
+	r, s, _ := ecdsa.Sign(rand.Reader, privKey, hash[:])
+	sig, _ := asn1.Marshal(struct {
+		R, S *big.Int
+	}{r, s})
+	sigBase64 := base64.StdEncoding.EncodeToString(sig)
+
+	return sigBase64, nil
 }
